@@ -1,151 +1,114 @@
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+import difflib
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_title='변경 내용 추적기',
+    page_icon='🔍',
 )
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# CSS 스타일 추가 (hover 기능 제거)
+st.markdown("""
+    <style>
+    /* 리셋 버튼 스타일  */
+    div[data-testid="stHorizontalBlock"] > div:first-child button {
+        background-color: #32CD32; /* 리셋 버튼 - 토마토색 */
+        color: white;
+        font-weight: bold;
+        border: none;
+        border-radius: 8px;
+        width: 100%;
+        padding: 10px;
+    }
 
+    /* 샘플 버튼 스타일  */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
+        background-color: #4682B4; /* 샘플 버튼 - 파란색 */
+        color: white;
+        font-weight: bold;
+        border: none;
+        border-radius: 8px;
+        width: 100%;
+        padding: 10px;
+    }
+
+    /* 비교하기 버튼 스타일 (hover 없음) */
+    button[data-testid="stButton"] {
+        background-color: #32CD32; /* 비교 버튼 - 연한 초록색 */
+        color: white;
+        font-weight: bold;
+        border: none;
+        border-radius: 8px;
+        width: 100%;
+        padding: 10px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 페이지 제목 설정
+st.title("🧐 변경 내용 추적기")
+st.info("**변경 내용 추적기**에 오신 것을 환영합니다. 수정 전 후 내용에서 어떤 내용이 바뀌었는지 쉽게 비교해보세요.")
+
+# 리셋 버튼 클릭 시 텍스트 초기화 함수
+def reset_text():
+    st.session_state["text1"] = ""
+    st.session_state["text2"] = ""
+
+# 샘플 입력 버튼 클릭 시 샘플 텍스트 입력 함수
+def sample_text():
+    st.session_state["text1"] = "안뇽하셰요! 반 갑솝니다. my name is SBhwang. this app is for detecting differences in text. Write text before you revised."
+    st.session_state["text2"] = "안녕하세요! 반갑습니다. My name is SBhwang. This app is for detecting differences in text. Write text after you revised."
+
+# 버튼 나란히 배치
+button_col1, button_col2 = st.columns(2)
+with button_col1:
+    if st.button("입력 내용 리셋"):
+        reset_text()
+
+with button_col2:
+    if st.button("샘플 내용 입력"):
+        sample_text()
+
+# 글자 크기 설정
+font_size = st.number_input("수정할 부분을 얼마나 크게 나타낼까요?", value=1.5, step=0.1)
+
+# 텍스트 입력 받기
+text_before, text_after = st.columns(2)
+with text_before:
+    text1 = st.text_area("수정 전 텍스트를 입력해주세요.", value=st.session_state.get("text1", ""), key="text1")
+with text_after:
+    text2 = st.text_area("수정 후 텍스트를 입력해주세요.", value=st.session_state.get("text2", ""), key="text2")
+
+# 두 텍스트의 차이를 시각적으로 표시하는 함수
 @st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+def show_diff(text1, text2, font_size):
+    diff = difflib.ndiff(text1.split(), text2.split())
+    diff_text = ""
+    for token in diff:
+        if token[0] == ' ':
+            diff_text += token[2:] + " "
+        elif token[0] == '-':
+            diff_text += f"<span style='color: red; background-color: #fdd; font-weight: bold; font-size: {font_size}em; text-decoration: line-through;'>{token[2:]}</span> "
+        elif token[0] == '+':
+            diff_text += f"<span style='color: green; background-color: #dfd; font-weight: bold; font-size: {font_size}em; text-decoration: underline;'>{token[2:]}</span> "
+    return diff_text
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+# 비교하기 버튼
+if st.button("바뀐 내용 비교하기", type= 'primary', use_container_width=True):
+    diff_result = show_diff(st.session_state["text1"], st.session_state["text2"], font_size)
+    st.markdown(diff_result, unsafe_allow_html=True)
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
-
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
-
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
-
-    return gdp_df
-
-gdp_df = get_gdp_data()
-
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+# 저작권 정보 추가
+st.markdown("""
+---
+<div style="text-align: center; font-size: 14px; line-height: 1.8; color: #555;">
+    <span>© 2024 <strong style="color: #333;">whatsdifferent</strong>. All rights reserved.</span><br>
+    <span style="font-weight: bold; color: #333;">Created by 황수빈</span>
+    <a href="mailto:sbhath17@gmail.com" style="color: #007ACC; text-decoration: none; margin-left: 10px; font-style: italic;">
+        sbhath17@gmail.com
+    </a>
+    <a href="https://github.com/Surihub" style="margin-left: 8px;">
+        <img src="https://img.shields.io/badge/GitHub-181717?style=flat-square&logo=github&logoColor=white" alt="GitHub">
+    </a>
+</div>
+""", unsafe_allow_html=True)
