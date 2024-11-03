@@ -104,11 +104,12 @@ st.markdown("""
 <div style="text-align: center; font-size: 14px; line-height: 1.8; color: #555;">
     <span>© 2024 <strong style="color: #333;">whatsdifferent</strong>. All rights reserved.</span><br>
     <span style="font-weight: bold; color: #333;">Created by 황수빈</span>
-    <a href="mailto:sbhath17@gmail.com" style="color: #007ACC; text-decoration: none; margin-left: 10px; font-style: italic;">
+    <span style="color: #007ACC; margin-left: 10px; font-style: italic;">
         sbhath17@gmail.com
-    </a>
+    </span>
     <a href="https://github.com/Surihub" style="margin-left: 8px;">
         <img src="https://img.shields.io/badge/GitHub-181717?style=flat-square&logo=github&logoColor=white" alt="GitHub">
     </a>
 </div>
+
 """, unsafe_allow_html=True)
